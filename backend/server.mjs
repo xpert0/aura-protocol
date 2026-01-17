@@ -180,13 +180,13 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/user/repay")
       return respond(res, 200, userRepay(body.addr, +body.amount));
     if (url.pathname === "/auth")
-      return resond(res,200,await auth(body.aadhar));
+      return respond(res,200,await auth(body.aadhar));
     if (url.pathname === "/address/add")
-      return resond(res,200,await addAddress(body.aadhar,body.addr));
+      return respond(res,200,await addAddress(body.aadhar,body.addr));
     if (url.pathname === "/address/rem")
-      return resond(res,200,await remAddress(body.aadhar,body.addr));
+      return respond(res,200,await remAddress(body.aadhar,body.addr));
     if (url.pathname === "/address/list")
-      return resond(res,200,await listAddr(body.aadhar));
+      return respond(res,200,await listAddr(body.aadhar));
     respond(res, 404, { error: "Route not found" });
   } catch (err) {
     respond(res, 400, { error: err.message });
