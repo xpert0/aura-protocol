@@ -125,10 +125,13 @@ async function auth(aadhar) {
 	return {first:true};
 }
 
-async function addAddress(aadhar,addr) {
-	await db.addAddr(aadhar,addr);
-	return {};
-}
+// async function addAddress(aadhar,addr) {
+// 	await db.addAddr(aadhar,addr);
+//   	const res = await db.getByAadhar(aadhar);
+// 	if(await db.getByAadhar(aadhar).address.includes(addr)) return {};
+// 	await db.addAddr({ aadhar });
+// 	return {};
+// }
 
 async function listAddr(aadhar,addr) {
 	return await db.getByAadhar(aadhar).address;
