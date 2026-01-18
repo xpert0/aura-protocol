@@ -51,6 +51,8 @@ function App() {
         setWallet(accounts[0]);
         localStorage.setItem("wallet_address", accounts[0]);
         setShowLoginModal(false); 
+
+        
       } catch (error) {
         console.error("Connection failed:", error);
       }

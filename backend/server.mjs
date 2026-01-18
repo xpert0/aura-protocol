@@ -126,7 +126,9 @@ async function auth(aadhar) {
 }
 
 async function addAddress(aadhar,addr) {
-	if(db.getByAadhar(aadhar).address.includes(addr)) return {};
+  const res = await db.getByAadhar(aadhar);
+  console.log(res.address)
+	if(await db.getByAadhar(aadhar).address.includes(addr)) return {};
 	await db.addAddr({ aadhar });
 	return {};
 }
