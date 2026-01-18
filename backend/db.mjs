@@ -85,7 +85,7 @@ async function updateDue(aadhar, amount) {
 }
 
 async function addAddr(aadhar, wallet) {
-  if (!validateWallet(wallet)) throw new Error("Invalid wallet address format");
+  // if (!validateWallet(wallet)) throw new Error("Invalid wallet address format");
   const db = await readDB();
   const user = db.find(u => u.aadhar === aadhar);
   if (!user) throw new Error("User not found");

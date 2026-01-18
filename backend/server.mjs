@@ -126,8 +126,7 @@ async function auth(aadhar) {
 }
 
 async function addAddress(aadhar,addr) {
-	if(db.getByAadhar(aadhar).address.includes(addr)) return {};
-	await db.addAddr({ aadhar });
+	await db.addAddr(aadhar,addr);
 	return {};
 }
 
@@ -182,7 +181,9 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/auth")
       return respond(res,200,await auth(body.aadhar));
     if (url.pathname === "/address/add")
-      return respond(res,200,await addAddress(body.aadhar,body.addr));
+      await db.addAddr(body.aadhar,body.addr);
+      return respond(res,200,{message:"Address added"});
+      // return respond(res,200,await addAddress(body.aadhar,body.addr));
     if (url.pathname === "/address/rem")
       return respond(res,200,await remAddress(body.aadhar,body.addr));
     if (url.pathname === "/address/list")
