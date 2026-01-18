@@ -6,6 +6,8 @@ import db from "./db.mjs";
 import { default as wc } from "./credit_js/witness_calculator.js";
 
 const PORT = 5001;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function getWalletProfile(address) {
   // For prototype: mainnet deployment will use the api with valid keys ~@xpert0
