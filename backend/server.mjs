@@ -177,9 +177,10 @@ const server = http.createServer(async (req, res) => {
       return respond(res, 200, userRepay(body.addr, +body.amount));
     if (url.pathname === "/auth")
       return respond(res,200,await auth(body.aadhar));
-    if (url.pathname === "/address/add")
+    if (url.pathname === "/address/add") {
       await db.addAddr(body.aadhar,body.addr);
       return respond(res,200,{message:"Address added"});
+    }
     if (url.pathname === "/address/rem")
       return respond(res,200,await remAddress(body.aadhar,body.addr));
     if (url.pathname === "/address/list")
