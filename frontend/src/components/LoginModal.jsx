@@ -75,6 +75,7 @@ const LoginModal = ({ isOpen, onClose, onComplete }) => {
         if(json.first) setStep(3);
         else setStep(4);
       });
+    localStorage.setItem("aadhar",aadhar);  
   };
 
   return (
