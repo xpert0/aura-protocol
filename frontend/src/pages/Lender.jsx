@@ -2,97 +2,139 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Input from '../components/Input';
 import GlassCard from '../components/GlassCard';
-import { getStore, getLenderBalance, withdrawLiquidity } from '../utils/mockStore';
-import { ArrowUpRight, ArrowDownLeft, ArrowLeft, Activity, Wallet } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, ArrowLeft, Activity, Wallet, Loader2 } from 'lucide-react';
 import { ethers } from "ethers";
 import { usdcmockfile, auravaultfile, usdcaddress, auravaultaddress } from "../utils/contract.js"
 
 const Lender = ({ wallet }) => {
   const navigate = useNavigate();
   const [amount, setAmount] = useState('');
+  
+  // Stats State
   const [myBalance, setMyBalance] = useState(0);
   const [globalPool, setGlobalPool] = useState(0);
+  
+  // UI State
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
+  // --- 1. LOAD DATA FROM BLOCKCHAIN ---
+  const loadData = async () => {
+      if (!wallet || !window.ethereum) return;
+
+      try {
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          // We only need a provider (read-only) to fetch balances
+          const vaultContract = new ethers.Contract(auravaultaddress, auravaultfile.abi, provider);
+
+          // Fetch both values in parallel
+          const [myPosition, tvl] = await Promise.all([
+              vaultContract.lenderBalances(wallet),
+              vaultContract.totalLent()
+          ]);
+
+          // Format USDC (6 decimals) to readable numbers
+          setMyBalance(parseFloat(ethers.formatUnits(myPosition, 6)));
+          setGlobalPool(parseFloat(ethers.formatUnits(tvl, 6)));
+
+      } catch (error) {
+          console.error("Error loading vault data:", error);
+      }
+  };
+
+  // Initial Load
   useEffect(() => {
-    const loadData = async () => {
-      const store = await getStore();
-      const bal = await getLenderBalance(wallet);
-      setGlobalPool(store.poolBalance);
-      setMyBalance(bal);
-    };
     loadData();
+    
+    // Optional: Poll for updates every 10 seconds (useful for live dashboards)
+    const interval = setInterval(loadData, 10000);
+    return () => clearInterval(interval);
   }, [wallet]);
 
 
-
+  // --- 2. PROVIDE LIQUIDITY ---
   const handleProvide = async () => {
-  if (!amount || !wallet) return;
+    if (!amount || !wallet) return;
+    setLoading(true);
+    setMessage('');
 
-  try {
-    setMessage("Initializing...");
+    try {
+      setMessage("Initializing...");
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
 
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
+      const usdcContract = new ethers.Contract(usdcaddress, usdcmockfile.abi, signer);
+      const liquidityContract = new ethers.Contract(auravaultaddress, auravaultfile.abi, signer);
 
-    const usdcAddress = usdcaddress; 
-    const liquidityContractAddress = auravaultaddress;
+      const parsedAmount = ethers.parseUnits(amount, 6);
 
-    const usdcContract = new ethers.Contract(usdcAddress, usdcmockfile.abi, signer);
-    const liquidityContract = new ethers.Contract(liquidityContractAddress, auravaultfile.abi, signer);
+      // Check allowance
+      const allowance = await usdcContract.allowance(wallet, auravaultaddress);
+      if (allowance < parsedAmount) {
+        setMessage("Approving USDC transfer...");
+        const approveTx = await usdcContract.approve(auravaultaddress, parsedAmount);
+        await approveTx.wait();
+      }
 
-    
-    const parsedAmount = ethers.parseUnits(amount, 6);
+      setMessage("Providing liquidity...");
+      const provideTx = await liquidityContract.provideLiquidity(parsedAmount);
+      await provideTx.wait();
+      
+      setMessage(`Successfully deposited $${amount}`);
+      setAmount('');
+      
+      // Refresh Data immediately after success
+      await loadData();
 
-
-    const allowance = await usdcContract.allowance(wallet, liquidityContractAddress); // BigInt in ethers v6
-    if (allowance < parsedAmount) {
-      setMessage("Approving USDC transfer...");
-      const approveTx = await usdcContract.approve(liquidityContractAddress, parsedAmount);
-      await approveTx.wait(); // wait for mining
-      console.log("Approval mined ");
-    } else {
-      console.log("Sufficient allowance, skipping approve");
+    } catch (error) {
+      console.error("Deposit failed:", error);
+      setMessage("Deposit failed. Check console.");
+    } finally {
+        setLoading(false);
     }
-
-    
-    setMessage("Providing liquidity...");
-    
-    const provideTx = await liquidityContract.provideLiquidity(parsedAmount, { gasLimit: 300_000 });
-    await provideTx.wait();
-    console.log("Liquidity provided ✅");
-
-    const store = await getStore(); // your backend/mock fetch
-    const bal = await getLenderBalance(wallet);
-
-    setMyBalance(bal);
-    setGlobalPool(store.poolBalance);
-    setMessage(`Successfully provided $${amount}`);
-    setAmount('');
-
-  } catch (error) {
-    console.error("Transaction failed:", error);
-    setMessage("Transaction failed. Check console for details.");
-  }
-};
-
-
-
-  const handleWithdraw = async () => {
-    if (!amount) return;
-    const success = await withdrawLiquidity(wallet, amount);
-    if (success) {
-      const store = await getStore();
-      const bal = await getLenderBalance(wallet);
-      setMyBalance(bal);
-      setGlobalPool(store.poolBalance);
-      setMessage(`Withdrawal queued for $${amount}`);
-    } else {
-      setMessage("Insufficient funds in your position.");
-    }
-    setAmount('');
   };
 
+
+  // --- 3. WITHDRAW LIQUIDITY ---
+  const handleWithdraw = async () => {
+    if (!amount || !wallet) return;
+    setLoading(true);
+    setMessage('');
+
+    try {
+      setMessage("Initializing withdrawal...");
+      
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const liquidityContract = new ethers.Contract(auravaultaddress, auravaultfile.abi, signer);
+
+      const parsedAmount = ethers.parseUnits(amount, 6);
+
+      setMessage("Please confirm withdrawal...");
+      const tx = await liquidityContract.withdrawLiquidity(parsedAmount);
+      
+      setMessage("Waiting for confirmation...");
+      await tx.wait(); 
+      
+      setMessage(`Successfully withdrawn $${amount}`);
+      setAmount('');
+      
+      // Refresh Data immediately after success
+      await loadData();
+
+    } catch (error) {
+      console.error("Withdrawal failed:", error);
+      if (error.message.includes("InsufficientBalance")) {
+        setMessage("Error: You don't have enough funds deposited.");
+      } else if (error.message.includes("Insolvent")) {
+        setMessage("Error: Vault funds are currently locked.");
+      } else {
+        setMessage("Withdrawal failed. Check console.");
+      }
+    } finally {
+        setLoading(false);
+    }
+  };
 
   return (
     <div className="w-full max-w-2xl mx-auto py-12">
@@ -122,20 +164,26 @@ const Lender = ({ wallet }) => {
 
         <GlassCard className="!p-10">
           
-     
-          <div className="flex justify-center gap-6 mb-10">
-            <div className="relative group p-6 rounded-2xl bg-black/40 border border-cyan-500/20 overflow-hidden w-full max-w-md">
+          {/* Stats Row */}
+          <div className="grid grid-cols-2 gap-6 mb-10">
+            <div className="relative group p-6 rounded-2xl bg-black/40 border border-cyan-500/20 overflow-hidden">
               <div className="absolute inset-0 bg-cyan-500/5 group-hover:bg-cyan-500/10 transition-colors" />
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-4">
                     <p className="text-cyan-400 text-[10px] uppercase tracking-[0.2em] font-bold">My Position</p>
                     <Activity size={16} className="text-cyan-500" />
                 </div>
-                <p className="text-3xl font-mono text-white tracking-tight">${myBalance.toLocaleString()}<span className="text-sm text-gray-500 ml-1">.00</span></p>
+                <p className="text-3xl font-mono text-white tracking-tight">${myBalance.toLocaleString()}</p>
               </div>
             </div>
 
-            
+            <div className="relative group p-6 rounded-2xl bg-black/40 border border-white/10 overflow-hidden">
+               <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/5 rounded-full blur-xl" />
+               <div className="relative z-10">
+                <p className="text-slate-400 text-[10px] uppercase tracking-[0.2em] font-bold mb-4">Protocol TVL</p>
+                <p className="text-2xl font-mono text-slate-300">${globalPool.toLocaleString()}</p>
+               </div>
+            </div>
           </div>
 
           <div className="bg-white/[0.02] p-6 rounded-2xl border border-white/5 mb-8">
@@ -151,23 +199,28 @@ const Lender = ({ wallet }) => {
           <div className="grid grid-cols-2 gap-4">
             <button 
               onClick={handleProvide} 
-              className="group relative overflow-hidden flex items-center justify-center gap-3 py-5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl transition-all hover:shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+              disabled={loading}
+              className={`group relative overflow-hidden flex items-center justify-center gap-3 py-5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl transition-all 
+                ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-[0_0_20px_rgba(6,182,212,0.4)]'}`}
             >
               <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-              <ArrowUpRight size={18} /> 
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <ArrowUpRight size={18} />}
               <span className="uppercase tracking-[0.1em] text-xs">Supply</span>
             </button>
             
             <button 
               onClick={handleWithdraw} 
-              className="flex items-center justify-center gap-3 py-5 border border-white/20 bg-transparent text-white font-bold rounded-xl hover:bg-white hover:text-black transition-all uppercase tracking-[0.1em] text-xs"
+              disabled={loading}
+              className={`flex items-center justify-center gap-3 py-5 border border-white/20 bg-transparent text-white font-bold rounded-xl transition-all uppercase tracking-[0.1em] text-xs
+                ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white hover:text-black'}`}
             >
-              <ArrowDownLeft size={18} /> Withdraw
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <ArrowDownLeft size={18} />}
+              Withdraw
             </button>
           </div>
           
           {message && (
-            <div className="mt-6 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-center">
+            <div className="mt-6 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-center animate-in fade-in slide-in-from-bottom-2">
                 <p className="text-xs text-blue-300 font-mono">{message}</p>
             </div>
           )}

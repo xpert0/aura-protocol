@@ -1,5 +1,5 @@
-import usdcmock from "../../../blockchain/build/contracts/MockUSDC.json" 
-import auravault from "../../../blockchain/build/contracts/AuraVault.json"
+import usdcmock from "../../../blockchain/artifacts/MockUSDC.json" 
+import auravault from "../../../blockchain/artifacts/AuraVault.json"
 
 export const usdcmockfile = usdcmock;
 export const auravaultfile = auravault;
